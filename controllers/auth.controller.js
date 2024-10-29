@@ -1,7 +1,8 @@
 const { default: axios } = require("axios");
+const pool = require("../config/db");
 
 module.exports.authorizeApp = (req, res) => {
-  const authorizationUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}&scope=activity:read_all`;
+  const authorizationUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}&scope=read,activity:read,activity:read_all`;
   res.redirect(authorizationUrl);
 };
 
@@ -16,12 +17,25 @@ module.exports.stravaAuthCallback = async (req, res) => {
       grant_type: "authorization_code",
     });
 
-    const { access_token, refresh_token, expires_at } = response.data;
+    const { access_token, refresh_token, expires_at, athlete } = response.data;
 
     // Assure-toi que la session est initialisée et stocke les tokens
     req.session.access_token = access_token;
     req.session.refresh_token = refresh_token;
     req.session.expires_at = expires_at;
+
+    // Stocke l'ID de l'athlète dans la table `users` avec les tokens
+    await pool.query(
+      `
+      INSERT INTO users (id, access_token, refresh_token, expires_at)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO UPDATE SET
+        access_token = EXCLUDED.access_token,
+        refresh_token = EXCLUDED.refresh_token,
+        expires_at = EXCLUDED.expires_at;
+      `,
+      [athlete.id, access_token, refresh_token, expires_at]
+    );
 
     res.send("Connexion réussie avec Strava !");
   } catch (error) {
