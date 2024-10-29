@@ -1,7 +1,18 @@
 const { default: axios } = require("axios");
 const pool = require("../config/db");
 
+const isAuthenticated = (req) => {
+  return req.session.access_token && req.session.refresh_token; // Vérifiez si les tokens sont présents
+};
+
+// Étape 1 : Rediriger vers Strava pour autorisation si non authentifié
 module.exports.authorizeApp = (req, res) => {
+  if (isAuthenticated(req)) {
+    // L'utilisateur est déjà authentifié, pas besoin de redirection
+    return res.send("Vous êtes déjà connecté !");
+  }
+
+  // Sinon, redirigez vers l'autorisation
   const authorizationUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}&scope=read,activity:read,activity:read_all`;
   res.redirect(authorizationUrl);
 };
