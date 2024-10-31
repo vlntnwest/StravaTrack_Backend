@@ -173,3 +173,30 @@ module.exports.getActivities = async (req, res) => {
     res.status(500).send("Erreur lors de la récupération des activités");
   }
 };
+
+module.exports.activityZones = async (req, res) => {
+  const { access_token } = req.session;
+
+  if (!access_token) {
+    return res.status(401).send("Utilisateur non authentifié");
+  }
+
+  try {
+    const activityResponse = await axios.get(
+      "https://www.strava.com/api/v3/activities/12775142044/zones",
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      }
+    );
+
+    res.json(activityResponse.data);
+  } catch (error) {
+    console.log(
+      "Erreur lors de la récupération des zones de l'activité",
+      error
+    );
+    res.status(500).send("Erreur lors de la récupération des zones d'activité");
+  }
+};

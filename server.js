@@ -8,6 +8,12 @@ const PORT = process.env.PORT;
 const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const pool = require("./config/db");
+const bodyParser = require("body-parser");
+
+app.use(express.json());
+
+//Body Parseer
+app.use(bodyParser.json());
 
 app.use(
   session({

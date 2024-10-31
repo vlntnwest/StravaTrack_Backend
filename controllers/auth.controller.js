@@ -10,7 +10,7 @@ module.exports.authorizeApp = (req, res) => {
     return res.send("Vous êtes déjà connecté !");
   }
 
-  const authorizationUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}&scope=read,activity:read,activity:read_all`;
+  const authorizationUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.REDIRECT_URI}&scope=read,activity:read,activity:read_all,profile:read_all`;
   res.redirect(authorizationUrl);
 };
 

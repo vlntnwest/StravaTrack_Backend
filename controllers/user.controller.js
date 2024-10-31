@@ -109,3 +109,40 @@ module.exports.stravaAthlete = async (req, res) => {
     res.status(500).send("Erreur lors de la récupération de l'athlete");
   }
 };
+
+module.exports.athleteZones = async (req, res) => {
+  const { access_token } = req.session;
+  const athleteId = req.params.id;
+
+  if (!access_token || !athleteId) {
+    return res
+      .status(401)
+      .send("Utilisateur non authentifié ou ID de l'athlète manquant");
+  }
+
+  try {
+    const zonesResponse = await axios.get(
+      "https://www.strava.com/api/v3/athlete/zones",
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      }
+    );
+
+    const zones = zonesResponse.data.heart_rate.zones;
+
+    const query = `
+      UPDATE athletes
+      SET heart_rate_zones = $1
+      WHERE id = $2
+    `;
+
+    await pool.query(query, [JSON.stringify(zones), athleteId]);
+
+    res.json(zonesResponse.data);
+  } catch (error) {
+    console.log("Erreur lors de la récupération des zones de l'athlète", error);
+    res.status(500).send("Erreur lors de la récupération des zones d'athlète");
+  }
+};
