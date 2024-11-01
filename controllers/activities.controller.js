@@ -6,7 +6,14 @@ const pool = new Pool({
 });
 
 module.exports.getActivities = async (req, res) => {
+  const athleteId = req.params.athleteId; // Récupération de l'athleteId depuis les paramètres de la requête
   const { access_token } = req.session;
+
+  if (!athleteId) {
+    return res.status(400).json({
+      error: "L'ID de l'athlète est requis pour récupérer les activités.",
+    });
+  }
 
   if (!access_token) {
     return res.status(401).send("Utilisateur non authentifié");
@@ -16,6 +23,22 @@ module.exports.getActivities = async (req, res) => {
     let allActivities = [];
     let page = 1;
     const per_page = 100;
+
+    // Récupérer la date de la dernière activité de la base de données
+    const lastActivityResult = await pool.query(
+      `
+      SELECT MAX(start_date_local) AS last_activity_date
+      FROM activities WHERE athlete_id = $1
+    `,
+      [athleteId]
+    );
+
+    const lastActivityDate = lastActivityResult.rows[0].last_activity_date;
+
+    // Si une date existe, la convertir en timestamp
+    const afterParam = lastActivityDate
+      ? new Date(lastActivityDate).getTime() / 1000
+      : null;
 
     // Boucle pour récupérer toutes les pages d'activités
     while (true) {
@@ -28,6 +51,7 @@ module.exports.getActivities = async (req, res) => {
           params: {
             per_page,
             page,
+            ...(afterParam && { after: afterParam }), // Ajouter le paramètre `after` si une date existe
           },
         }
       );
@@ -59,15 +83,9 @@ module.exports.getActivities = async (req, res) => {
         total_elevation_gain,
         type,
         sport_type,
-        start_date,
         start_date_local,
-        timezone,
-        utc_offset,
         location_country,
         kudos_count,
-        trainer,
-        commute,
-        manual,
         gear_id,
         average_speed,
         max_speed,
@@ -87,13 +105,13 @@ module.exports.getActivities = async (req, res) => {
         `
         INSERT INTO activities (
           id, athlete_id, name, distance, moving_time, elapsed_time, total_elevation_gain, type,
-          sport_type, start_date, start_date_local, timezone, utc_offset, location_country,
-          kudos_count, trainer, commute, manual, gear_id, average_speed, max_speed,
+          sport_type, start_date_local, location_country,
+          kudos_count, gear_id, average_speed, max_speed,
           has_heartrate, average_heartrate, max_heartrate, elev_high, elev_low, upload_id,
           external_id, summary_polyline, start_lat, start_lng, end_lat, end_lng
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-          $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+          $20, $21, $22, $23, $24, $25, $26, $27
         )
         ON CONFLICT (id) DO UPDATE SET
           athlete_id = EXCLUDED.athlete_id,
@@ -104,15 +122,9 @@ module.exports.getActivities = async (req, res) => {
           total_elevation_gain = EXCLUDED.total_elevation_gain,
           type = EXCLUDED.type,
           sport_type = EXCLUDED.sport_type,
-          start_date = EXCLUDED.start_date,
           start_date_local = EXCLUDED.start_date_local,
-          timezone = EXCLUDED.timezone,
-          utc_offset = EXCLUDED.utc_offset,
           location_country = EXCLUDED.location_country,
           kudos_count = EXCLUDED.kudos_count,
-          trainer = EXCLUDED.trainer,
-          commute = EXCLUDED.commute,
-          manual = EXCLUDED.manual,
           gear_id = EXCLUDED.gear_id,
           average_speed = EXCLUDED.average_speed,
           max_speed = EXCLUDED.max_speed,
@@ -139,15 +151,9 @@ module.exports.getActivities = async (req, res) => {
           total_elevation_gain,
           type,
           sport_type,
-          start_date,
           start_date_local,
-          timezone,
-          utc_offset,
           location_country,
           kudos_count,
-          trainer,
-          commute,
-          manual,
           gear_id,
           average_speed,
           max_speed,
@@ -167,7 +173,17 @@ module.exports.getActivities = async (req, res) => {
       );
     }
 
-    res.json(allActivities); // Retourne toutes les activités de type "Run"
+    // Récupérer les activités à partir de la base de données
+    const query = `SELECT * FROM activities WHERE athlete_id = $1 ORDER BY start_date_local`;
+    const params = [athleteId];
+
+    const { rows: recentActivities } = await pool.query(query, params);
+
+    if (recentActivities.length === 0) {
+      console.log("Aucune activité trouvée pour l'athlète donné.");
+    }
+
+    res.json(recentActivities); // Retourne toutes les activités de type "Run"
   } catch (error) {
     console.error("Erreur lors de la récupération des activités:", error);
     res.status(500).send("Erreur lors de la récupération des activités");

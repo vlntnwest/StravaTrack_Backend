@@ -15,7 +15,7 @@ router.get("/athlete", userController.stravaAthlete);
 router.get("/athlete/:id/heartzones", userController.athleteZones);
 
 // activities
-router.get("/activities", activitiesController.getActivities);
+router.get("/:athleteId/activities", activitiesController.getActivities);
 router.get("/activities/zones", activitiesController.activityZones);
 
 module.exports = router;

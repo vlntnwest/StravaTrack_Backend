@@ -26,7 +26,7 @@ app.use(
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60, // 1 heure
+      maxAge: 1000 * 60 * 60 * 24 * 14, // 2 semaines
     },
   })
 );
