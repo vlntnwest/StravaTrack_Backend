@@ -189,17 +189,28 @@ module.exports.getActivities = async (req, res) => {
     res.status(500).send("Erreur lors de la récupération des activités");
   }
 };
-
-module.exports.activityZones = async (req, res) => {
+module.exports.activityLaps = async (req, res) => {
   const { access_token } = req.session;
+  const { activityId } = req.params;
 
   if (!access_token) {
     return res.status(401).send("Utilisateur non authentifié");
   }
 
   try {
+    // Vérifiez d'abord si des laps existent déjà dans la base de données
+    const existingLapsQuery = `
+      SELECT * FROM laps WHERE activity_id = $1;
+    `;
+    const existingLaps = await pool.query(existingLapsQuery, [activityId]);
+
+    if (existingLaps.rows.length > 0) {
+      // Si des laps existent déjà, les renvoyer
+      return res.json(existingLaps.rows);
+    }
+
     const activityResponse = await axios.get(
-      "https://www.strava.com/api/v3/activities/12775142044/zones",
+      `https://www.strava.com/api/v3/activities/${activityId}/laps`,
       {
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -207,7 +218,41 @@ module.exports.activityZones = async (req, res) => {
       }
     );
 
-    res.json(activityResponse.data);
+    const lapsData = activityResponse.data;
+
+    const insertQuery = `
+      INSERT INTO laps (
+        id, activity_id, name, elapsed_time, moving_time,
+        start_date_local, distance, average_speed,
+        max_speed, lap_index, total_elevation_gain,
+        average_heartrate, max_heartrate, pace_zone
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (id) DO NOTHING;  -- Ne rien faire si le lap existe déjà
+    `;
+
+    for (const lap of lapsData) {
+      const lapValues = [
+        lap.id,
+        activityId,
+        lap.name,
+        lap.elapsed_time,
+        lap.moving_time,
+        lap.start_date_local,
+        lap.distance,
+        lap.average_speed,
+        lap.max_speed,
+        lap.lap_index,
+        lap.total_elevation_gain,
+        lap.average_heartrate || null,
+        lap.max_heartrate || null,
+        lap.pace_zone || null,
+      ];
+
+      await pool.query(insertQuery, lapValues);
+    }
+
+    res.json(lapsData);
   } catch (error) {
     console.log(
       "Erreur lors de la récupération des zones de l'activité",

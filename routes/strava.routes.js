@@ -16,6 +16,6 @@ router.get("/athlete/:id/heartzones", userController.athleteZones);
 
 // activities
 router.get("/:athleteId/activities", activitiesController.getActivities);
-router.get("/activities/zones", activitiesController.activityZones);
+router.get("/activities/:activityId/laps", activitiesController.activityLaps);
 
 module.exports = router;
