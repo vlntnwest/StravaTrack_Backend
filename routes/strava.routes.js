@@ -1,21 +1,34 @@
 const express = require("express");
-const authController = require("../controllers/auth.controller");
-const activitiesController = require("../controllers/activities.controller");
-const userController = require("../controllers/user.controller");
+const {
+  getActivities,
+  getLastActivities,
+  activityLaps,
+} = require("../controllers/activities.controller");
+const {
+  stravaAthlete,
+  athleteZones,
+} = require("../controllers/user.controller");
+const {
+  authorizeApp,
+  stravaAuthCallback,
+  logout,
+} = require("../controllers/auth.controller");
+const { refreshAccessToken } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
 // auth
-router.get("/auth", authController.authorizeApp);
-router.get("/auth/callback", authController.stravaAuthCallback);
-router.get("/logout", authController.logout);
+router.get("/auth", authorizeApp);
+router.get("/auth/callback", stravaAuthCallback);
+router.get("/logout", logout);
 
 // user
-router.get("/athlete", userController.stravaAthlete);
-router.get("/athlete/:id/heartzones", userController.athleteZones);
+router.get("/athlete", refreshAccessToken, stravaAthlete);
+router.get("/athlete/:id/heartzones", refreshAccessToken, athleteZones);
 
 // activities
-router.get("/:athleteId/activities", activitiesController.getActivities);
-router.get("/activities/:activityId/laps", activitiesController.activityLaps);
+router.get("/activities", refreshAccessToken, getActivities);
+router.get("/:athleteId/activities", refreshAccessToken, getLastActivities);
+router.get("/activities/:activityId/laps", refreshAccessToken, activityLaps);
 
 module.exports = router;
