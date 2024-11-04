@@ -7,13 +7,22 @@ const pool = new Pool({
 });
 
 module.exports.stravaAthlete = async (req, res) => {
-  const { access_token } = req.session;
+  const { access_token, athleteId } = req.session;
 
   if (!access_token) {
     return res.status(401).send("Utilisateur non authentifié");
   }
 
   try {
+    const existingAthleteQuery = `
+      SELECT * FROM athletes WHERE id = $1;
+    `;
+    const existingAthlete = await pool.query(existingAthleteQuery, [athleteId]);
+
+    if (existingAthlete.rows.length > 0) {
+      return res.json(existingAthlete.rows);
+    }
+
     const athleteResponse = await axios.get(
       "https://www.strava.com/api/v3/athlete",
       {
@@ -111,8 +120,7 @@ module.exports.stravaAthlete = async (req, res) => {
 };
 
 module.exports.athleteZones = async (req, res) => {
-  const { access_token } = req.session;
-  const athleteId = req.params.id;
+  const { access_token, athleteId } = req.session;
 
   if (!access_token || !athleteId) {
     return res

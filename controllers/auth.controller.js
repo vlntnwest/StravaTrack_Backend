@@ -31,6 +31,7 @@ module.exports.stravaAuthCallback = async (req, res) => {
     req.session.access_token = access_token;
     req.session.refresh_token = refresh_token;
     req.session.expires_at = expires_at;
+    req.session.athleteId = athlete.id;
 
     // Stocke l'ID de l'athlète dans la table `users` avec les tokens
     await pool.query(

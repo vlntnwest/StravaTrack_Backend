@@ -165,8 +165,7 @@ module.exports.getActivities = async (req, res) => {
 };
 
 module.exports.getLastActivities = async (req, res) => {
-  const athleteId = req.params.athleteId; // Récupération de l'athleteId depuis les paramètres de la requête
-  const { access_token } = req.session;
+  const { access_token, athleteId } = req.session;
 
   if (!athleteId) {
     return res.status(400).json({
@@ -333,7 +332,7 @@ module.exports.getLastActivities = async (req, res) => {
     }
 
     // Récupérer les activités à partir de la base de données
-    const query = `SELECT * FROM activities WHERE athlete_id = $1 ORDER BY start_date_local`;
+    const query = `SELECT * FROM activities WHERE athlete_id = $1 ORDER BY start_date_local DESC`;
     const params = [athleteId];
 
     const { rows: recentActivities } = await pool.query(query, params);
@@ -424,7 +423,7 @@ module.exports.getActivityLaps = async (req, res) => {
 
 module.exports.getActivityStreams = async (req, res) => {
   const { access_token } = req.session;
-  const id = req.params.id;
+  const activityId = req.params.activityId;
 
   if (!access_token) {
     return res.status(401).send("Utilisateur non authentifié");
@@ -434,14 +433,16 @@ module.exports.getActivityStreams = async (req, res) => {
     const existingStreamsQuery = `
       SELECT * FROM activity_streams WHERE id = $1;
     `;
-    const existingStreams = await pool.query(existingStreamsQuery, [id]);
+    const existingStreams = await pool.query(existingStreamsQuery, [
+      activityId,
+    ]);
 
     if (existingStreams.rows.length > 0) {
       return res.json(existingStreams.rows[0]);
     }
 
     const streamsResponse = await axios.get(
-      `https://www.strava.com/api/v3/activities/${id}/streams`,
+      `https://www.strava.com/api/v3/activities/${activityId}/streams`,
       {
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -467,7 +468,7 @@ module.exports.getActivityStreams = async (req, res) => {
     `;
 
     const insertValues = [
-      id,
+      activityId,
       distanceData.length ? distanceData : null,
       heartrateData.length ? heartrateData : null,
       timeData.length ? timeData : null,
@@ -495,7 +496,7 @@ module.exports.getActivityStreams = async (req, res) => {
 
 module.exports.getActivityZones = async (req, res) => {
   const { access_token } = req.session;
-  const id = req.params.id;
+  const activityId = req.params.activityId;
 
   if (!access_token) {
     return res
@@ -504,8 +505,18 @@ module.exports.getActivityZones = async (req, res) => {
   }
 
   try {
+    const existingZonesQuery = `
+      SELECT * FROM activity_zones WHERE activity_id = $1;
+    `;
+    const existingZones = await pool.query(existingZonesQuery, [activityId]);
+
+    if (existingZones.rows.length > 0) {
+      // Si des laps existent déjà, les renvoyer
+      return res.json(existingZones.rows);
+    }
+
     const zonesResponse = await axios.get(
-      `https://www.strava.com/api/v3/activities/${id}/zones`,
+      `https://www.strava.com/api/v3/activities/${activityId}/zones`,
       {
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -513,7 +524,36 @@ module.exports.getActivityZones = async (req, res) => {
       }
     );
 
-    res.json(zonesResponse.data);
+    const zonesData = zonesResponse.data;
+
+    // Initialisation des valeurs pace et heartrate
+    let pace = null;
+    let heartrate = null;
+
+    // Parcourir les zones pour extraire pace et heartrate
+    for (const zone of zonesData) {
+      if (zone.type === "pace") {
+        pace = JSON.stringify(zone.distribution_buckets);
+      } else if (zone.type === "heartrate") {
+        heartrate = JSON.stringify(zone.distribution_buckets);
+      }
+    }
+
+    // Insérer ou mettre à jour les données de zones dans la table activity_zones
+    const insertQuery = `
+      INSERT INTO activity_zones (activity_id, pace, heartrate)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (activity_id) DO UPDATE 
+      SET pace = EXCLUDED.pace, heartrate = EXCLUDED.heartrate;
+    `;
+
+    const insertValues = [activityId, pace, heartrate];
+
+    // Effectuer l'insertion ou la mise à jour
+    await pool.query(insertQuery, insertValues);
+
+    // Renvoyer les données récupérées
+    res.json(zonesData);
   } catch (error) {
     console.log(
       "Erreur lors de la récupération des zones de l'activité",
