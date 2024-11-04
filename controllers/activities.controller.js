@@ -349,7 +349,7 @@ module.exports.getLastActivities = async (req, res) => {
   }
 };
 
-module.exports.activityLaps = async (req, res) => {
+module.exports.getActivityLaps = async (req, res) => {
   const { access_token } = req.session;
   const { activityId } = req.params;
 
@@ -413,6 +413,104 @@ module.exports.activityLaps = async (req, res) => {
     }
 
     res.json(lapsData);
+  } catch (error) {
+    console.log(
+      "Erreur lors de la récupération des zones de l'activité",
+      error
+    );
+    res.status(500).send("Erreur lors de la récupération des zones d'activité");
+  }
+};
+
+module.exports.getActivityStreams = async (req, res) => {
+  const { access_token } = req.session;
+  const id = req.params.id;
+
+  if (!access_token) {
+    return res.status(401).send("Utilisateur non authentifié");
+  }
+
+  try {
+    const existingStreamsQuery = `
+      SELECT * FROM activity_streams WHERE id = $1;
+    `;
+    const existingStreams = await pool.query(existingStreamsQuery, [id]);
+
+    if (existingStreams.rows.length > 0) {
+      return res.json(existingStreams.rows[0]);
+    }
+
+    const streamsResponse = await axios.get(
+      `https://www.strava.com/api/v3/activities/${id}/streams`,
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+        params: {
+          keys: "time,distance,heartrate",
+          key_by_type: true,
+        },
+      }
+    );
+
+    const streamsData = streamsResponse.data;
+
+    const distanceData = streamsData.distance?.data || [];
+    const heartrateData = streamsData.heartrate?.data || [];
+    const timeData = streamsData.time?.data || [];
+
+    const insertQuery = `
+      INSERT INTO activity_streams (id, distance, heartrate, time)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    const insertValues = [
+      id,
+      distanceData.length ? distanceData : null,
+      heartrateData.length ? heartrateData : null,
+      timeData.length ? timeData : null,
+    ];
+
+    await pool.query(insertQuery, insertValues);
+
+    res.json({
+      distance: distanceData,
+      heartrate: heartrateData,
+      time: timeData,
+    });
+  } catch (error) {
+    console.error(
+      "Erreur lors de la récupération des streams de l'activité",
+      error
+    );
+    res
+      .status(500)
+      .send("Erreur lors de la récupération des streams d'activité");
+  }
+};
+
+module.exports.getActivityZones = async (req, res) => {
+  const { access_token } = req.session;
+  const id = req.params.id;
+
+  if (!access_token) {
+    return res
+      .status(401)
+      .send("Utilisateur non authentifié ou ID de l'athlète manquant");
+  }
+
+  try {
+    const zonesResponse = await axios.get(
+      `https://www.strava.com/api/v3/activities/${id}/zones`,
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      }
+    );
+
+    res.json(zonesResponse.data);
   } catch (error) {
     console.log(
       "Erreur lors de la récupération des zones de l'activité",
