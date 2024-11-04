@@ -447,7 +447,7 @@ module.exports.getActivityStreams = async (req, res) => {
           Authorization: `Bearer ${access_token}`,
         },
         params: {
-          keys: "time,distance,heartrate",
+          keys: "time,distance,heartrate,velocity_smooth",
           key_by_type: true,
         },
       }
@@ -458,10 +458,11 @@ module.exports.getActivityStreams = async (req, res) => {
     const distanceData = streamsData.distance?.data || [];
     const heartrateData = streamsData.heartrate?.data || [];
     const timeData = streamsData.time?.data || [];
+    const velocityData = streamsData.velocity_smooth?.data || [];
 
     const insertQuery = `
-      INSERT INTO activity_streams (id, distance, heartrate, time)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO activity_streams (id, distance, heartrate, time, velocity_smooth)
+      VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (id) DO NOTHING;
     `;
 
@@ -470,6 +471,7 @@ module.exports.getActivityStreams = async (req, res) => {
       distanceData.length ? distanceData : null,
       heartrateData.length ? heartrateData : null,
       timeData.length ? timeData : null,
+      velocityData.length ? velocityData : null,
     ];
 
     await pool.query(insertQuery, insertValues);
@@ -478,6 +480,7 @@ module.exports.getActivityStreams = async (req, res) => {
       distance: distanceData,
       heartrate: heartrateData,
       time: timeData,
+      Velocity: velocityData,
     });
   } catch (error) {
     console.error(
