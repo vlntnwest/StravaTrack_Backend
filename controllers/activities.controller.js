@@ -1,5 +1,6 @@
 const { default: axios } = require("axios");
 const { Pool } = require("pg");
+const { mpsToMinpKm } = require("../utils/convert");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -387,7 +388,7 @@ module.exports.getActivityLaps = async (req, res) => {
         average_heartrate, max_heartrate, pace_zone
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (id) DO NOTHING;  -- Ne rien faire si le lap existe déjà
+      ON CONFLICT (id) DO NOTHING;
     `;
 
     for (const lap of lapsData) {
@@ -461,9 +462,11 @@ module.exports.getActivityStreams = async (req, res) => {
     const timeData = streamsData.time?.data || [];
     const velocityData = streamsData.velocity_smooth?.data || [];
 
+    const paceData = mpsToMinpKm(velocityData) || [];
+
     const insertQuery = `
-      INSERT INTO activity_streams (id, distance, heartrate, time, velocity_smooth)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO activity_streams (id, distance, heartrate, time, velocity_smooth, pace)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO NOTHING;
     `;
 
@@ -473,6 +476,7 @@ module.exports.getActivityStreams = async (req, res) => {
       heartrateData.length ? heartrateData : null,
       timeData.length ? timeData : null,
       velocityData.length ? velocityData : null,
+      paceData.length ? paceData : null,
     ];
 
     await pool.query(insertQuery, insertValues);
@@ -482,6 +486,7 @@ module.exports.getActivityStreams = async (req, res) => {
       heartrate: heartrateData,
       time: timeData,
       Velocity: velocityData,
+      Pace: paceData,
     });
   } catch (error) {
     console.error(
