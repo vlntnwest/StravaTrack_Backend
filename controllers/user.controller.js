@@ -154,3 +154,102 @@ module.exports.athleteZones = async (req, res) => {
     res.status(500).send("Erreur lors de la récupération des zones d'athlète");
   }
 };
+
+module.exports.stravaAthleteStats = async (req, res) => {
+  const { access_token, athleteId } = req.session;
+
+  if (!access_token || !athleteId) {
+    return res
+      .status(401)
+      .send("Utilisateur non authentifié ou ID de l'athlète manquant");
+  }
+
+  try {
+    const existingAthleteQuery = `
+      SELECT * FROM athletes_stats WHERE athlete_id = $1;
+    `;
+    const existingAthlete = await pool.query(existingAthleteQuery, [athleteId]);
+
+    if (existingAthlete.rows.length > 0) {
+      return res.json(existingAthlete.rows);
+    }
+
+    const response = await axios.get(
+      `https://www.strava.com/api/v3/athletes/${athleteId}/stats`,
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      }
+    );
+
+    const stats = response.data;
+
+    // Extraire les statistiques spécifiques aux courses
+    const { recent_run_totals, all_run_totals, ytd_run_totals } = stats;
+
+    const query = `
+      INSERT INTO athletes_stats (
+        athlete_id, 
+        recent_run_count, recent_run_distance, recent_run_moving_time, recent_run_elapsed_time, recent_run_elevation_gain, recent_run_achievement_count,
+        all_run_count, all_run_distance, all_run_moving_time, all_run_elapsed_time, all_run_elevation_gain,
+        ytd_run_count, ytd_run_distance, ytd_run_moving_time, ytd_run_elapsed_time, ytd_run_elevation_gain
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ON CONFLICT (athlete_id)
+      DO UPDATE SET 
+        recent_run_count = EXCLUDED.recent_run_count,
+        recent_run_distance = EXCLUDED.recent_run_distance,
+        recent_run_moving_time = EXCLUDED.recent_run_moving_time,
+        recent_run_elapsed_time = EXCLUDED.recent_run_elapsed_time,
+        recent_run_elevation_gain = EXCLUDED.recent_run_elevation_gain,
+        recent_run_achievement_count = EXCLUDED.recent_run_achievement_count,
+        all_run_count = EXCLUDED.all_run_count,
+        all_run_distance = EXCLUDED.all_run_distance,
+        all_run_moving_time = EXCLUDED.all_run_moving_time,
+        all_run_elapsed_time = EXCLUDED.all_run_elapsed_time,
+        all_run_elevation_gain = EXCLUDED.all_run_elevation_gain,
+        ytd_run_count = EXCLUDED.ytd_run_count,
+        ytd_run_distance = EXCLUDED.ytd_run_distance,
+        ytd_run_moving_time = EXCLUDED.ytd_run_moving_time,
+        ytd_run_elapsed_time = EXCLUDED.ytd_run_elapsed_time,
+        ytd_run_elevation_gain = EXCLUDED.ytd_run_elevation_gain,
+        updated_at = NOW();
+    `;
+
+    const values = [
+      athleteId,
+      recent_run_totals.count,
+      recent_run_totals.distance,
+      recent_run_totals.moving_time,
+      recent_run_totals.elapsed_time,
+      recent_run_totals.elevation_gain,
+      recent_run_totals.achievement_count,
+      all_run_totals.count,
+      all_run_totals.distance,
+      all_run_totals.moving_time,
+      all_run_totals.elapsed_time,
+      all_run_totals.elevation_gain,
+      ytd_run_totals.count,
+      ytd_run_totals.distance,
+      ytd_run_totals.moving_time,
+      ytd_run_totals.elapsed_time,
+      ytd_run_totals.elevation_gain,
+    ];
+
+    // Exécute la requête
+    await pool.query(query, values);
+
+    res.json(stats);
+  } catch (error) {
+    console.log(
+      "Erreur lors de la récupération ou de la sauvegarde des stats de course",
+      error
+    );
+    res
+      .status(500)
+      .send(
+        "Erreur lors de la récupération ou de la sauvegarde des stats de course"
+      );
+  }
+};

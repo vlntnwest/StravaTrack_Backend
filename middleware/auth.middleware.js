@@ -10,7 +10,7 @@ module.exports.refreshAccessToken = async (req, res, next) => {
   const date = Date.now();
 
   if (date < expires_at) {
-    return res.status(200).send("Access token is fresh");
+    next();
   }
 
   if (!refresh_token) {

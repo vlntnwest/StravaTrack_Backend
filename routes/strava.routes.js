@@ -9,6 +9,7 @@ const {
 const {
   stravaAthlete,
   athleteZones,
+  stravaAthleteStats,
 } = require("../controllers/user.controller");
 const {
   authorizeApp,
@@ -24,13 +25,14 @@ router.get("/auth", authorizeApp);
 router.get("/auth/callback", stravaAuthCallback);
 router.get("/logout", logout);
 
-// user
+// athlete
 router.get("/athlete", refreshAccessToken, stravaAthlete);
+router.get("/athlete/stats", refreshAccessToken, stravaAthleteStats);
 router.get("/athlete/zones", refreshAccessToken, athleteZones);
 
 // activities
 router.get("/activities", refreshAccessToken, getActivities);
-router.get("/lastActivities", refreshAccessToken, getLastActivities); //Add new activities to db and display all
+router.get("/activities/recent", refreshAccessToken, getLastActivities); //Add new activities to db and display all
 router.get("/activities/:activityId/laps", refreshAccessToken, getActivityLaps);
 router.get(
   "/activities/:activityId/zones",
